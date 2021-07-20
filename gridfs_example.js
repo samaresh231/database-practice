@@ -3,20 +3,20 @@ const path = require('path');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const multer = require('multer');
-// const Grid = require('gridfs-stream');
+const Grid = require('gridfs-stream');
 const {GridFsStorage} = require('multer-gridfs-storage');
 
 const app = express();
 
 mongoose.connect('mongodb://localhost/gridfs', {useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true});
 
-// let gfs;
+let gfs;
 
-const db = mongoose.connection;
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', function() {
-    // gfs = Grid(conn.db, mongoose.mongo);
-    // gfs.collection('uploads');
+const conn = mongoose.connection;
+conn.on('error', console.error.bind(console, 'connection error:'));
+conn.once('open', function() {
+    gfs = Grid(conn.db, mongoose.mongo);
+    gfs.collection('uploads');
     console.log('connected to database')
 });
 
@@ -50,6 +50,46 @@ app.post('/upload', upload.single('file'), (req, res) => {
         message: error.message
     })
 });
+
+app.get('/files', (req, res) => {
+    gfs.files.find().toArray((err, files) => {
+        // Check if files
+        if (!files || files.length === 0) {
+            return res.status(404).json({
+                err: 'No files exist'
+            });
+        }
+    
+        // Files exist
+        return res.json(files);
+    });
+});
+
+// app.get('/files/:filename', (req, res) => {
+//     gfs.files.findOne({ filename: req.params.filename }, (err, file) => {
+//         //Check if file
+//         if (!file || file.length === 0) {
+//             return res.status(404).json({
+//                 err: 'No file exists'
+//             });
+//         }
+//         //File exists
+//         return res.json(file);
+//     });
+// });
+
+app.get('/files/:filename', (req, res) => {
+    gfs.files.findOne({ filename: req.params.filename }, (err, file) => {
+      // Check if file
+      if (!file || file.length === 0) {
+        return res.status(404).json({
+          err: 'No file exists'
+        });
+      }
+        const readstream = gfs.createReadStream(file.filename);
+        readstream.pipe(res);
+    });
+  });
 
 app.listen(8000, () => {
     console.log('server listening on port 8000')
